@@ -1,0 +1,168 @@
+import 'package:flutter/material.dart';
+
+import '../models/destination.dart';
+import '../services/local_data_service.dart';
+import '../services/offline_storage.dart';
+import '../services/recommender_service.dart';
+import 'about_tab.dart';
+import 'home_tab.dart';
+import 'map_screen.dart';
+import 'recommend_tab.dart';
+import 'saved_tab.dart';
+
+class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  int _currentIndex = 0;
+
+  bool _loading = true;
+  String? _error;
+  List<Destination> _destinations = [];
+  RecommenderService? _service;
+  List<Destination> _savedDestinations = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadApp();
+  }
+
+  Future<void> _loadApp() async {
+    try {
+      await LocalDataService.instance.init();
+
+      final destinations = await OfflineStorage.loadDestinations();
+      final similarPlaces = await OfflineStorage.loadSimilarPlaces();
+      final saved = await LocalDataService.instance.getSavedDestinations();
+
+      setState(() {
+        _destinations = destinations;
+        _service = RecommenderService(similarPlaces);
+        _savedDestinations = saved;
+        _loading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _toggleSaved(Destination destination) async {
+    final exists = _savedDestinations.any((d) => d.id == destination.id);
+
+    if (exists) {
+      await LocalDataService.instance.removeSavedDestination(destination.id);
+    } else {
+      await LocalDataService.instance.saveDestination(destination);
+    }
+
+    final updated = await LocalDataService.instance.getSavedDestinations();
+
+    if (mounted) {
+      setState(() {
+        _savedDestinations = updated;
+      });
+    }
+  }
+
+  bool _isSaved(Destination destination) {
+    return _savedDestinations.any((d) => d.id == destination.id);
+  }
+
+  void _goToTab(int index) {
+    setState(() {
+      _currentIndex = index;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null || _service == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Rural Tourism Guide')),
+        body: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Text('Could not load app data.\n\n$_error'),
+        ),
+      );
+    }
+
+    final pages = [
+      HomeTab(
+        destinations: _destinations,
+        onOpenRecommend: () => _goToTab(1),
+        onOpenMap: () => _goToTab(2),
+        onOpenSaved: () => _goToTab(3),
+      ),
+      RecommendTab(
+        destinations: _destinations,
+        service: _service!,
+        onToggleSaved: _toggleSaved,
+        isSaved: _isSaved,
+      ),
+      MapScreen(
+        destinations: _destinations,
+      ),
+      SavedTab(
+        savedDestinations: _savedDestinations,
+        onToggleSaved: _toggleSaved,
+      ),
+      const AboutTab(),
+    ];
+
+    return Scaffold(
+      body: IndexedStack(
+        index: _currentIndex,
+        children: pages,
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.tune_outlined),
+            selectedIcon: Icon(Icons.tune),
+            label: 'Recommend',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.map_outlined),
+            selectedIcon: Icon(Icons.map),
+            label: 'Map',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bookmark_border),
+            selectedIcon: Icon(Icons.bookmark),
+            label: 'Saved',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.info_outline),
+            selectedIcon: Icon(Icons.info),
+            label: 'About',
+          ),
+        ],
+      ),
+    );
+  }
+}
