@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/accommodation.dart';
 import '../models/destination.dart';
 import '../models/user_preferences.dart';
 import '../services/local_data_service.dart';
@@ -9,6 +10,7 @@ import 'details_screen.dart';
 
 class RecommendTab extends StatefulWidget {
   final List<Destination> destinations;
+  final List<Accommodation> accommodations;
   final RecommenderService service;
   final Future<void> Function(Destination) onToggleSaved;
   final bool Function(Destination) isSaved;
@@ -16,6 +18,7 @@ class RecommendTab extends StatefulWidget {
   const RecommendTab({
     super.key,
     required this.destinations,
+    required this.accommodations,
     required this.service,
     required this.onToggleSaved,
     required this.isSaved,
@@ -26,14 +29,43 @@ class RecommendTab extends StatefulWidget {
 }
 
 class _RecommendTabState extends State<RecommendTab> {
-  final activityOptions = const ['viewpoint', 'hiking', 'lake', 'culture', 'adventure', 'wildlife'];
-  final budgetOptions = const ['Low', 'Medium', 'High'];
-  final seasonOptions = const ['All Year', 'Oct-May', 'Jun-Sep'];
-  final vibeOptions = const ['quiet', 'family', 'photography'];
+  final activityOptions = const [
+    'culture',
+    'hiking',
+    'lake',
+    'photography',
+    'adventure',
+    'relaxation',
+    'wildlife',
+    'viewpoint',
+  ];
+
+  final budgetOptions = const [
+    'budget',
+    'medium',
+    'premium',
+  ];
+
+  final seasonOptions = const [
+    'spring',
+    'summer',
+    'monsoon',
+    'autumn',
+    'winter',
+  ];
+
+  final vibeOptions = const [
+    'quiet',
+    'family',
+    'photography',
+    'adventure',
+    'peaceful',
+    'cultural',
+  ];
 
   String activity = 'culture';
-  String budget = 'Low';
-  String season = 'All Year';
+  String budget = 'budget';
+  String season = 'autumn';
   String vibe = 'quiet';
 
   Destination? _seed;
@@ -80,7 +112,7 @@ class _RecommendTabState extends State<RecommendTab> {
     final seen = <String>{};
 
     for (final item in [...ranked, ...similar]) {
-      final key = item.destination.name.toLowerCase();
+      final key = item.destination.id.toLowerCase();
       if (seen.add(key)) {
         merged.add(item);
       }
@@ -103,12 +135,12 @@ class _RecommendTabState extends State<RecommendTab> {
       'count': results.length,
     });
 
-    if (mounted) {
-      setState(() {
-        _results = results;
-        _busy = false;
-      });
-    }
+    if (!mounted) return;
+
+    setState(() {
+      _results = results;
+      _busy = false;
+    });
   }
 
   Future<void> _loadCachedRecommendations() async {
@@ -119,22 +151,26 @@ class _RecommendTabState extends State<RecommendTab> {
       seed: _seed,
     );
 
-    final cached = await LocalDataService.instance.getCachedRecommendations(cacheKey);
+    final cached =
+        await LocalDataService.instance.getCachedRecommendations(cacheKey);
 
-    await LocalDataService.instance.logEvent('recommendations_loaded_from_cache', {
-      'activity': prefs.activity,
-      'budget': prefs.budget,
-      'season': prefs.season,
-      'vibe': prefs.vibe,
-      'seed': _seed?.name,
-      'count': cached.length,
+    await LocalDataService.instance.logEvent(
+      'recommendations_loaded_from_cache',
+      {
+        'activity': prefs.activity,
+        'budget': prefs.budget,
+        'season': prefs.season,
+        'vibe': prefs.vibe,
+        'seed': _seed?.name,
+        'count': cached.length,
+      },
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _results = cached;
     });
-
-    if (mounted) {
-      setState(() {
-        _results = cached;
-      });
-    }
   }
 
   @override
@@ -162,49 +198,130 @@ class _RecommendTabState extends State<RecommendTab> {
                             'Travel preferences',
                             style: Theme.of(context).textTheme.titleLarge,
                           ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Choose your interests and generate destination suggestions from the local offline dataset.',
+                          ),
                           const SizedBox(height: 16),
                           DropdownButtonFormField<String>(
+                            isExpanded: true,
                             value: activity,
-                            decoration: const InputDecoration(labelText: 'Activity'),
+                            decoration: const InputDecoration(
+                              labelText: 'Activity',
+                              border: OutlineInputBorder(),
+                            ),
                             items: activityOptions
-                                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                                .map(
+                                  (e) => DropdownMenuItem<String>(
+                                    value: e,
+                                    child: Text(_labelize(e)),
+                                  ),
+                                )
                                 .toList(),
-                            onChanged: (v) => setState(() => activity = v ?? activity),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setState(() => activity = v);
+                              }
+                            },
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
+                            isExpanded: true,
                             value: budget,
-                            decoration: const InputDecoration(labelText: 'Budget'),
+                            decoration: const InputDecoration(
+                              labelText: 'Budget',
+                              border: OutlineInputBorder(),
+                            ),
                             items: budgetOptions
-                                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                                .map(
+                                  (e) => DropdownMenuItem<String>(
+                                    value: e,
+                                    child: Text(_labelize(e)),
+                                  ),
+                                )
                                 .toList(),
-                            onChanged: (v) => setState(() => budget = v ?? budget),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setState(() => budget = v);
+                              }
+                            },
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
+                            isExpanded: true,
                             value: season,
-                            decoration: const InputDecoration(labelText: 'Season'),
+                            decoration: const InputDecoration(
+                              labelText: 'Season',
+                              border: OutlineInputBorder(),
+                            ),
                             items: seasonOptions
-                                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                                .map(
+                                  (e) => DropdownMenuItem<String>(
+                                    value: e,
+                                    child: Text(_labelize(e)),
+                                  ),
+                                )
                                 .toList(),
-                            onChanged: (v) => setState(() => season = v ?? season),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setState(() => season = v);
+                              }
+                            },
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
+                            isExpanded: true,
                             value: vibe,
-                            decoration: const InputDecoration(labelText: 'Trip vibe'),
+                            decoration: const InputDecoration(
+                              labelText: 'Trip vibe',
+                              border: OutlineInputBorder(),
+                            ),
                             items: vibeOptions
-                                .map((e) => DropdownMenuItem(value: e, child: Text(e)))
+                                .map(
+                                  (e) => DropdownMenuItem<String>(
+                                    value: e,
+                                    child: Text(_labelize(e)),
+                                  ),
+                                )
                                 .toList(),
-                            onChanged: (v) => setState(() => vibe = v ?? vibe),
+                            onChanged: (v) {
+                              if (v != null) {
+                                setState(() => vibe = v);
+                              }
+                            },
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<Destination>(
+                            isExpanded: true,
                             value: _seed,
-                            decoration: const InputDecoration(labelText: 'Starting point for similar places'),
+                            decoration: const InputDecoration(
+                              labelText: 'Starting point for similar places',
+                              border: OutlineInputBorder(),
+                            ),
                             items: widget.destinations
-                                .map((d) => DropdownMenuItem(value: d, child: Text(d.name)))
+                                .map(
+                                  (d) => DropdownMenuItem<Destination>(
+                                    value: d,
+                                    child: Text(
+                                      d.name,
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ),
+                                )
                                 .toList(),
+                            selectedItemBuilder: (context) {
+                              return widget.destinations.map((d) {
+                                return Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    d.name,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                );
+                              }).toList();
+                            },
                             onChanged: (v) => setState(() => _seed = v),
                           ),
                           const SizedBox(height: 20),
@@ -216,10 +333,16 @@ class _RecommendTabState extends State<RecommendTab> {
                                   ? const SizedBox(
                                       width: 18,
                                       height: 18,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     )
                                   : const Icon(Icons.explore_outlined),
-                              label: const Text('Generate Recommendations'),
+                              label: Text(
+                                _busy
+                                    ? 'Generating...'
+                                    : 'Generate Recommendations',
+                              ),
                             ),
                           ),
                           const SizedBox(height: 10),
@@ -241,7 +364,17 @@ class _RecommendTabState extends State<RecommendTab> {
                       'Recommended destinations',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
-                  const SizedBox(height: 12),
+                  if (_results.isNotEmpty) const SizedBox(height: 12),
+                  if (_results.isEmpty)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Text(
+                          'No recommendations yet. Choose your preferences and tap Generate Recommendations.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    ),
                   ..._results.map(
                     (result) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
@@ -258,6 +391,7 @@ class _RecommendTabState extends State<RecommendTab> {
                                   builder: (_) => DetailsScreen(
                                     destination: result.destination,
                                     reasons: result.reasons,
+                                    accommodations: widget.accommodations,
                                   ),
                                 ),
                               );
@@ -270,9 +404,9 @@ class _RecommendTabState extends State<RecommendTab> {
                               onPressed: () async {
                                 await widget.onToggleSaved(result.destination);
                                 if (mounted) {
-                                setState(() {});
-                              }
-                            },
+                                  setState(() {});
+                                }
+                              },
                               icon: Icon(
                                 widget.isSaved(result.destination)
                                     ? Icons.bookmark
@@ -291,5 +425,10 @@ class _RecommendTabState extends State<RecommendTab> {
         ],
       ),
     );
+  }
+
+  static String _labelize(String value) {
+    if (value.isEmpty) return value;
+    return value[0].toUpperCase() + value.substring(1);
   }
 }

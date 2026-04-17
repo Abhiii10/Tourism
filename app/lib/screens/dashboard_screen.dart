@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/accommodation.dart';
 import '../models/destination.dart';
 import '../services/local_data_service.dart';
 import '../services/offline_storage.dart';
@@ -22,9 +23,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   bool _loading = true;
   String? _error;
+
   List<Destination> _destinations = [];
-  RecommenderService? _service;
+  List<Accommodation> _accommodations = [];
   List<Destination> _savedDestinations = [];
+
+  RecommenderService? _service;
 
   @override
   void initState() {
@@ -37,16 +41,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
       await LocalDataService.instance.init();
 
       final destinations = await OfflineStorage.loadDestinations();
+      final accommodations = await OfflineStorage.loadAccommodations();
       final similarPlaces = await OfflineStorage.loadSimilarPlaces();
       final saved = await LocalDataService.instance.getSavedDestinations();
 
+      if (!mounted) return;
+
       setState(() {
         _destinations = destinations;
+        _accommodations = accommodations;
         _service = RecommenderService(similarPlaces);
         _savedDestinations = saved;
         _loading = false;
+        _error = null;
       });
     } catch (e) {
+      if (!mounted) return;
+
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -65,11 +76,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final updated = await LocalDataService.instance.getSavedDestinations();
 
-    if (mounted) {
-      setState(() {
-        _savedDestinations = updated;
-      });
-    }
+    if (!mounted) return;
+
+    setState(() {
+      _savedDestinations = updated;
+    });
   }
 
   bool _isSaved(Destination destination) {
@@ -86,13 +97,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
       );
     }
 
     if (_error != null || _service == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Rural Tourism Guide')),
+        appBar: AppBar(
+          title: const Text('Rural Tourism Guide'),
+        ),
         body: Padding(
           padding: const EdgeInsets.all(20),
           child: Text('Could not load app data.\n\n$_error'),
@@ -109,15 +124,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       RecommendTab(
         destinations: _destinations,
+        accommodations: _accommodations,
         service: _service!,
         onToggleSaved: _toggleSaved,
         isSaved: _isSaved,
       ),
       MapScreen(
         destinations: _destinations,
+        accommodations: _accommodations,
       ),
       SavedTab(
         savedDestinations: _savedDestinations,
+        accommodations: _accommodations,
         onToggleSaved: _toggleSaved,
       ),
       const AboutTab(),

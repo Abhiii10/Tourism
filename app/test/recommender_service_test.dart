@@ -9,26 +9,50 @@ void main() {
       const Destination(
         id: '1',
         name: 'Ghachok',
-        type: 'Village',
-        description: 'Quiet Gurung village with waterfalls and hiking trails',
-        amenities: 'waterfalls|hiking|viewpoint',
-        bestSeason: 'All Year',
-        priceTier: 'Low',
-        culturalTags: 'Gurung|quiet|village',
-        lat: 28.3789,
-        lon: 83.9789,
+        province: 'Gandaki',
+        district: 'Kaski',
+        municipality: null,
+        category: ['village', 'cultural'],
+        activities: ['hiking', 'culture', 'photography'],
+        bestSeason: ['spring', 'autumn'],
+        budgetLevel: 'budget',
+        accessibility: 'moderate',
+        familyFriendly: true,
+        adventureLevel: 2,
+        cultureLevel: 4,
+        natureLevel: 4,
+        shortDescription: 'Quiet Gurung village with hiking trails.',
+        fullDescription:
+            'Ghachok is a quiet Gurung village with waterfalls and hiking trails.',
+        latitude: 28.3789,
+        longitude: 83.9789,
+        tags: ['gurung', 'quiet', 'village'],
+        source: 'test',
+        confidence: 'high',
       ),
       const Destination(
         id: '2',
         name: 'Kahun Danda',
-        type: 'Viewpoint',
-        description: 'Scenic ridge viewpoint east of Pokhara',
-        amenities: 'viewpoint|sunrise|hiking',
-        bestSeason: 'Oct-May',
-        priceTier: 'Low',
-        culturalTags: 'nature|photography',
-        lat: 28.233,
-        lon: 84.03,
+        province: 'Gandaki',
+        district: 'Kaski',
+        municipality: null,
+        category: ['viewpoint', 'adventure'],
+        activities: ['hiking', 'photography', 'sightseeing'],
+        bestSeason: ['autumn', 'winter'],
+        budgetLevel: 'budget',
+        accessibility: 'easy',
+        familyFriendly: true,
+        adventureLevel: 2,
+        cultureLevel: 1,
+        natureLevel: 4,
+        shortDescription: 'Scenic ridge viewpoint east of Pokhara.',
+        fullDescription:
+            'Kahun Danda is a scenic ridge viewpoint popular for sunrise and hiking.',
+        latitude: 28.233,
+        longitude: 84.03,
+        tags: ['nature', 'photography', 'sunrise', 'viewpoint'],
+        source: 'test',
+        confidence: 'high',
       ),
     ];
 
@@ -41,8 +65,8 @@ void main() {
     test('returns ranked results for preferences', () {
       final prefs = const UserPreferences(
         activity: 'culture',
-        budget: 'Low',
-        season: 'All Year',
+        budget: 'budget',
+        season: 'autumn',
         vibe: 'quiet',
       );
 
@@ -53,7 +77,8 @@ void main() {
     });
 
     test('returns similar destinations from offline similarity map', () {
-      final results = service.similarToDestination(destinations.first, destinations);
+      final results =
+          service.similarToDestination(destinations.first, destinations);
 
       expect(results, isNotEmpty);
       expect(results.first.destination.name, 'Kahun Danda');

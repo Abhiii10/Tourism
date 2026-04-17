@@ -51,7 +51,7 @@ class HomeTab extends StatelessWidget {
                   right: 20,
                   bottom: 24,
                   child: Text(
-                    'Discover rural destinations around Pokhara through recommendations, maps, and curated local insights.',
+                    'Discover rural destinations around Gandaki through recommendations, maps, and curated local insights.',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 16,
@@ -90,7 +90,6 @@ class HomeTab extends StatelessWidget {
                             LayoutBuilder(
                               builder: (context, constraints) {
                                 final isNarrow = constraints.maxWidth < 420;
-
                                 return GridView.count(
                                   shrinkWrap: true,
                                   physics: const NeverScrollableScrollPhysics(),
@@ -162,18 +161,26 @@ class HomeTab extends StatelessWidget {
                                     children: [
                                       Text(
                                         d.name,
-                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                              fontWeight: FontWeight.w700,
-                                            ),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleMedium
+                                            ?.copyWith(fontWeight: FontWeight.w700),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        '${d.type} • ${d.bestSeason}',
+                                        '${d.primaryCategory} • ${d.bestSeasonText}',
                                         style: Theme.of(context).textTheme.bodySmall,
                                       ),
+                                      if (d.locationText.isNotEmpty) ...[
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          d.locationText,
+                                          style: Theme.of(context).textTheme.bodySmall,
+                                        ),
+                                      ],
                                       const SizedBox(height: 8),
                                       Text(
-                                        d.description,
+                                        d.shortDescription,
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),

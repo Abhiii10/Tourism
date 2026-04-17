@@ -64,7 +64,7 @@ class DestinationCard extends StatelessWidget {
                           children: [
                             _MetaChip(label: destination.type),
                             _MetaChip(label: '${destination.priceTier} budget'),
-                            _MetaChip(label: destination.bestSeason),
+                            _MetaChip(label: destination.bestSeasonText),
                           ],
                         ),
                       ],

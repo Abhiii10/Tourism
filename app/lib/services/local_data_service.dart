@@ -9,6 +9,7 @@ import 'recommender_service.dart';
 
 class LocalDataService {
   LocalDataService._();
+
   static final LocalDataService instance = LocalDataService._();
 
   Database? _db;
@@ -79,7 +80,7 @@ class LocalDataService {
       'saved_destinations',
       {
         'id': destination.id,
-        'payload': jsonEncode(_destinationToJson(destination)),
+        'payload': jsonEncode(destination.toJson()),
         'saved_at': DateTime.now().millisecondsSinceEpoch,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
@@ -142,7 +143,7 @@ class LocalDataService {
       return {
         'score': r.score,
         'reasons': r.reasons,
-        'destination': _destinationToJson(r.destination),
+        'destination': r.destination.toJson(),
       };
     }).toList();
 
@@ -162,7 +163,9 @@ class LocalDataService {
     });
   }
 
-  Future<List<RecommendationResult>> getCachedRecommendations(String cacheKey) async {
+  Future<List<RecommendationResult>> getCachedRecommendations(
+    String cacheKey,
+  ) async {
     await init();
 
     final rows = await _database.query(
@@ -174,7 +177,7 @@ class LocalDataService {
 
     if (rows.isEmpty) return [];
 
-    final payload = jsonDecode(rows.first['payload'] as String) as List<dynamic>;
+    final payload = jsonDecode(rows.first['payload'] as String) as List;
 
     return payload.map((entry) {
       final map = Map<String, dynamic>.from(entry as Map);
@@ -199,20 +202,5 @@ class LocalDataService {
         'created_at': DateTime.now().millisecondsSinceEpoch,
       },
     );
-  }
-
-  Map<String, dynamic> _destinationToJson(Destination d) {
-    return {
-      'id': d.id,
-      'name': d.name,
-      'type': d.type,
-      'description': d.description,
-      'amenities': d.amenities,
-      'best_season': d.bestSeason,
-      'price_tier': d.priceTier,
-      'cultural_tags': d.culturalTags,
-      'lat': d.lat,
-      'lon': d.lon,
-    };
   }
 }
