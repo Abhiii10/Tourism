@@ -4,7 +4,7 @@ import '../models/destination.dart';
 
 class DestinationCard extends StatelessWidget {
   final Destination destination;
-  final List<String> reasons;
+  final List reasons;
   final String scoreLabel;
   final VoidCallback onTap;
 
@@ -18,7 +18,7 @@ class DestinationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tags = <String>{
+    final tags = {
       ...destination.culturalTagList,
       ...destination.amenityList,
     }.take(4).toList();
@@ -53,9 +53,10 @@ class DestinationCard extends StatelessWidget {
                           destination.name,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 6),
                         Wrap(
@@ -72,7 +73,10 @@ class DestinationCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 7,
+                    ),
                     decoration: BoxDecoration(
                       color: Theme.of(context).colorScheme.primaryContainer,
                       borderRadius: BorderRadius.circular(999),
@@ -115,7 +119,10 @@ class DestinationCard extends StatelessWidget {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.55),
+                    color: Theme.of(context)
+                        .colorScheme
+                        .surfaceContainerHighest
+                        .withValues(alpha: 0.55),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -168,7 +175,10 @@ class _MetaChip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.65),
+        color: Theme.of(context)
+            .colorScheme
+            .surfaceContainerHighest
+            .withValues(alpha: 0.65),
       ),
       child: Text(
         label,

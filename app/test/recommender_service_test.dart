@@ -57,8 +57,8 @@ void main() {
     ];
 
     final service = RecommenderService({
-      'Ghachok': [
-        {'name': 'Kahun Danda', 'score': 0.71}
+      '1': [
+        {'id': '2', 'score': 0.71}
       ]
     });
 

@@ -121,8 +121,9 @@ class DetailsScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          Colors.black.withOpacity(0.12),
-                          Colors.black.withOpacity(0.62),
+                          Colors.black.withValues(alpha: 0.12),
+                          Colors.black.withValues(alpha: 0.62),
+                        
                         ],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
@@ -497,7 +498,7 @@ class _InfoBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
+        color: Colors.white.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(

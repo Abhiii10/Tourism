@@ -6,9 +6,9 @@ import '../services/local_data_service.dart';
 import '../services/offline_storage.dart';
 import '../services/recommender_service.dart';
 import 'about_tab.dart';
-import 'home_tab.dart';
+import 'home_tab.dart' as home;
 import 'map_screen.dart';
-import 'recommend_tab.dart';
+import 'recommend_tab.dart' as recommend;
 import 'saved_tab.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -115,14 +115,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
-    final pages = [
-      HomeTab(
+    final List<Widget> pages = [
+      home.HomeTab(
         destinations: _destinations,
         onOpenRecommend: () => _goToTab(1),
         onOpenMap: () => _goToTab(2),
         onOpenSaved: () => _goToTab(3),
       ),
-      RecommendTab(
+      recommend.RecommendTab(
         destinations: _destinations,
         accommodations: _accommodations,
         service: _service!,
