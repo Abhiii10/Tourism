@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../models/destination.dart';
+import 'details_screen.dart';
 
-class HomeTab extends StatelessWidget {
+class HomeTab extends StatefulWidget {
   final List<Destination> destinations;
   final VoidCallback onOpenRecommend;
   final VoidCallback onOpenMap;
@@ -17,8 +18,46 @@ class HomeTab extends StatelessWidget {
   });
 
   @override
+  State<HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends State<HomeTab> {
+  String _query = '';
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  List<Destination> get _filteredDestinations {
+    if (_query.trim().isEmpty) {
+      return widget.destinations;
+    }
+
+    final q = _query.toLowerCase();
+
+    return widget.destinations.where((d) {
+      final text = [
+        d.name,
+        d.district ?? '',
+        d.municipality ?? '',
+        ...d.category,
+        ...d.activities,
+        ...d.tags,
+        d.shortDescription,
+        d.fullDescription,
+      ].join(' ').toLowerCase();
+
+      return text.contains(q);
+    }).toList();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final featured = destinations.take(3).toList();
+    final featured = widget.destinations.take(3).toList();
+    final results = _filteredDestinations;
 
     return CustomScrollView(
       slivers: [
@@ -63,6 +102,7 @@ class HomeTab extends StatelessWidget {
             ),
           ),
         ),
+
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -72,6 +112,38 @@ class HomeTab extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+
+                    /// 🔍 SEARCH BAR
+                    TextField(
+                      controller: _controller,
+                      onChanged: (value) {
+                        setState(() {
+                          _query = value;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Search destinations...',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _query.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  _controller.clear();
+                                  setState(() {
+                                    _query = '';
+                                  });
+                                },
+                              )
+                            : null,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    /// QUICK ACTIONS
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(18),
@@ -102,25 +174,25 @@ class HomeTab extends StatelessWidget {
                                       icon: Icons.explore_outlined,
                                       title: 'Get Recommendations',
                                       subtitle: 'Find places based on preferences',
-                                      onTap: onOpenRecommend,
+                                      onTap: widget.onOpenRecommend,
                                     ),
                                     _QuickActionCard(
                                       icon: Icons.map_outlined,
                                       title: 'Explore Map',
                                       subtitle: 'View destinations on map',
-                                      onTap: onOpenMap,
+                                      onTap: widget.onOpenMap,
                                     ),
                                     _QuickActionCard(
                                       icon: Icons.bookmark_outline,
                                       title: 'Saved Places',
                                       subtitle: 'Revisit your shortlist',
-                                      onTap: onOpenSaved,
+                                      onTap: widget.onOpenSaved,
                                     ),
                                     _QuickActionCard(
                                       icon: Icons.travel_explore_outlined,
                                       title: 'Rural Tourism',
                                       subtitle: 'Discover authentic local experiences',
-                                      onTap: onOpenRecommend,
+                                      onTap: widget.onOpenRecommend,
                                     ),
                                   ],
                                 );
@@ -130,69 +202,30 @@ class HomeTab extends StatelessWidget {
                         ),
                       ),
                     ),
+
                     const SizedBox(height: 16),
+
+                    /// 🔥 SEARCH RESULTS OR FEATURED
                     Text(
-                      'Featured destinations',
+                      _query.isEmpty
+                          ? 'Featured destinations'
+                          : 'Search results (${results.length})',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
+
                     const SizedBox(height: 12),
-                    ...featured.map(
-                      (d) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Container(
-                                  width: 56,
-                                  height: 56,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(16),
-                                    color: Theme.of(context).colorScheme.primaryContainer,
-                                  ),
-                                  child: const Icon(Icons.terrain_outlined),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        d.name,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleMedium
-                                            ?.copyWith(fontWeight: FontWeight.w700),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        '${d.primaryCategory} • ${d.bestSeasonText}',
-                                        style: Theme.of(context).textTheme.bodySmall,
-                                      ),
-                                      if (d.locationText.isNotEmpty) ...[
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          d.locationText,
-                                          style: Theme.of(context).textTheme.bodySmall,
-                                        ),
-                                      ],
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        d.shortDescription,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+
+                    if (_query.isEmpty)
+                      ...featured.map((d) => _destinationCard(context, d))
+                    else if (results.isEmpty)
+                      const Card(
+                        child: Padding(
+                          padding: EdgeInsets.all(20),
+                          child: Text('No results found'),
                         ),
-                      ),
-                    ),
+                      )
+                    else
+                      ...results.map((d) => _destinationCard(context, d)),
                   ],
                 ),
               ),
@@ -200,6 +233,70 @@ class HomeTab extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _destinationCard(BuildContext context, Destination d) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Card(
+        child: InkWell(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => DetailsScreen(
+                  destination: d,
+                  reasons: const ['Opened from search'],
+                  accommodations: const [],
+                ),
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                  ),
+                  child: const Icon(Icons.terrain_outlined),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        d.name,
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${d.primaryCategory} • ${d.bestSeasonText}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        d.shortDescription,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
