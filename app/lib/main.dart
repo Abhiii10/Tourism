@@ -1,9 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'screens/dashboard_screen.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    print("ENV LOAD ERROR: $e");
+  }
+
   runApp(const RuralTourismApp());
 }
 

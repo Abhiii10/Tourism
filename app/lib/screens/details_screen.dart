@@ -53,6 +53,8 @@ class DetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     final tags = <String>{
       ...destination.tags,
       ...destination.activities,
@@ -107,23 +109,19 @@ class DetailsScreen extends StatelessWidget {
         slivers: [
           SliverAppBar.large(
             pinned: true,
-            expandedHeight: 280,
+            expandedHeight: 300,
             title: Text(destination.name),
             flexibleSpace: FlexibleSpaceBar(
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.asset(
-                    'assets/images/pokhara.png',
-                    fit: BoxFit.cover,
-                  ),
+                  _buildHeaderImage(),
                   Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [
-                          Colors.black.withValues(alpha: 0.12),
-                          Colors.black.withValues(alpha: 0.62),
-                        
+                          Colors.black.withOpacity(0.10),
+                          Colors.black.withOpacity(0.68),
                         ],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
@@ -139,21 +137,66 @@ class DetailsScreen extends StatelessWidget {
                       children: [
                         Text(
                           destination.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 28,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                         const SizedBox(height: 8),
+                        if (destination.locationText.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.location_on_outlined,
+                                  size: 18,
+                                  color: Colors.white70,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    destination.locationText,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (destination.displayDescription.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Text(
+                              destination.displayDescription,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
                           children: [
-                            _InfoBadge(label: _labelize(destination.primaryCategory)),
+                            _InfoBadge(
+                              label: _labelize(destination.primaryCategory),
+                            ),
                             _InfoBadge(label: destination.bestSeasonText),
                             if (destination.budgetLevel != null)
-                              _InfoBadge(label: _labelize(destination.budgetLevel!)),
+                              _InfoBadge(
+                                label: _labelize(destination.budgetLevel!),
+                              ),
                           ],
                         ),
                       ],
@@ -168,7 +211,7 @@ class DetailsScreen extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 720),
+                  constraints: const BoxConstraints(maxWidth: 760),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -186,26 +229,19 @@ class DetailsScreen extends StatelessWidget {
                               Expanded(
                                 child: Text(
                                   destination.locationText,
-                                  style: Theme.of(context).textTheme.bodyMedium,
+                                  style: theme.textTheme.bodyMedium,
                                 ),
                               ),
                             ],
                           ),
                         ),
 
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Overview',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 10),
-                              Text(destination.displayDescription),
-                            ],
+                      _SectionCard(
+                        title: 'Overview',
+                        child: Text(
+                          destination.displayDescription,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            height: 1.55,
                           ),
                         ),
                       ),
@@ -213,148 +249,145 @@ class DetailsScreen extends StatelessWidget {
                       const SizedBox(height: 16),
 
                       if (reasons.isNotEmpty)
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(18),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Why recommended',
-                                  style: Theme.of(context).textTheme.titleMedium,
+                        _SectionCard(
+                          title: 'Why recommended',
+                          child: Column(
+                            children: reasons.take(4).map((r) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.check_circle,
+                                      size: 18,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        r,
+                                        style: theme.textTheme.bodyMedium?.copyWith(
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                const SizedBox(height: 10),
-                                ...reasons.map(
-                                  (r) => ListTile(
-                                    contentPadding: EdgeInsets.zero,
-                                    leading: const Icon(Icons.check_circle_outline),
-                                    title: Text(r),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              );
+                            }).toList(),
                           ),
                         ),
 
                       const SizedBox(height: 16),
 
                       if (tags.isNotEmpty)
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(18),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Highlights',
-                                  style: Theme.of(context).textTheme.titleMedium,
-                                ),
-                                const SizedBox(height: 12),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: tags
-                                      .take(12)
-                                      .map((t) => Chip(label: Text(_labelize(t))))
-                                      .toList(),
-                                ),
-                              ],
-                            ),
+                        _SectionCard(
+                          title: 'Highlights',
+                          child: Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: tags
+                                .take(12)
+                                .map((t) => Chip(label: Text(_labelize(t))))
+                                .toList(),
                           ),
                         ),
 
                       const SizedBox(height: 16),
 
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Location',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                destination.latitude != null &&
-                                        destination.longitude != null
-                                    ? '${destination.latitude}, ${destination.longitude}'
-                                    : 'Coordinates not available',
-                              ),
-                              const SizedBox(height: 12),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: FilledButton.icon(
-                                      onPressed: destination.latitude != null &&
-                                              destination.longitude != null
-                                          ? () => _openMap(context)
-                                          : null,
-                                      icon: const Icon(Icons.map_outlined),
-                                      label: const Text('Open Map'),
-                                    ),
+                      _SectionCard(
+                        title: 'Location',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Padding(
+                                  padding: EdgeInsets.only(top: 2),
+                                  child: Icon(Icons.map_outlined, size: 18),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    destination.locationText.isNotEmpty
+                                        ? destination.locationText
+                                        : 'Location available on map',
+                                    style: theme.textTheme.bodyMedium,
                                   ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: destination.latitude != null &&
-                                              destination.longitude != null
-                                          ? () => _openDirections(context)
-                                          : null,
-                                      icon: const Icon(Icons.directions_outlined),
-                                      label: const Text('Directions'),
-                                    ),
-                                  ),
-                                ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              destination.latitude != null &&
+                                      destination.longitude != null
+                                  ? 'Coordinates available for map view'
+                                  : 'Coordinates not available',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
-                            ],
-                          ),
+                            ),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: FilledButton.icon(
+                                    onPressed: destination.latitude != null &&
+                                            destination.longitude != null
+                                        ? () => _openMap(context)
+                                        : null,
+                                    icon: const Icon(Icons.map_outlined),
+                                    label: const Text('Open Map'),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: destination.latitude != null &&
+                                            destination.longitude != null
+                                        ? () => _openDirections(context)
+                                        : null,
+                                    icon: const Icon(Icons.directions_outlined),
+                                    label: const Text('Directions'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
 
                       const SizedBox(height: 16),
 
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Accommodations',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 12),
-                              if (matchedAccommodations.isEmpty)
-                                const Text(
-                                  'No accommodation data available for this destination yet.',
-                                )
-                              else
-                                ...matchedAccommodations.map(
-                                  (acc) => Container(
+                      _SectionCard(
+                        title: 'Accommodations',
+                        child: matchedAccommodations.isEmpty
+                            ? Text(
+                                'No accommodation data available for this destination yet.',
+                                style: theme.textTheme.bodyMedium,
+                              )
+                            : Column(
+                                children: matchedAccommodations.map((acc) {
+                                  return Container(
                                     margin: const EdgeInsets.only(bottom: 14),
                                     padding: const EdgeInsets.all(14),
                                     decoration: BoxDecoration(
-                                      border: Border.all(color: Colors.grey.shade300),
-                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: theme.colorScheme.outlineVariant,
+                                      ),
+                                      borderRadius: BorderRadius.circular(16),
+                                      color: theme.colorScheme.surface,
                                     ),
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Row(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                acc.name,
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w700,
-                                                  fontSize: 16,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
+                                        Text(
+                                          acc.name,
+                                          style: theme.textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
                                         ),
                                         const SizedBox(height: 10),
                                         Wrap(
@@ -364,17 +397,13 @@ class DetailsScreen extends StatelessWidget {
                                             if (acc.type != null &&
                                                 acc.type!.trim().isNotEmpty)
                                               Chip(
-                                                label: Text(
-                                                  _labelize(acc.type!),
-                                                ),
+                                                label: Text(_labelize(acc.type!)),
                                                 visualDensity: VisualDensity.compact,
                                               ),
                                             if (acc.priceRange != null &&
                                                 acc.priceRange!.trim().isNotEmpty)
                                               Chip(
-                                                label: Text(
-                                                  _labelize(acc.priceRange!),
-                                                ),
+                                                label: Text(_labelize(acc.priceRange!)),
                                                 visualDensity: VisualDensity.compact,
                                               ),
                                             if ((acc.type ?? '').toLowerCase() ==
@@ -448,20 +477,15 @@ class DetailsScreen extends StatelessWidget {
                                         const SizedBox(height: 10),
                                         Text(
                                           'Source: ${acc.source} • Confidence: ${_labelize(acc.confidence)}',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .bodySmall
-                                              ?.copyWith(
-                                                color: Colors.grey.shade700,
-                                              ),
+                                          style: theme.textTheme.bodySmall?.copyWith(
+                                            color: theme.colorScheme.onSurfaceVariant,
+                                          ),
                                         ),
                                       ],
                                     ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
+                                  );
+                                }).toList(),
+                              ),
                       ),
 
                       const SizedBox(height: 24),
@@ -472,6 +496,23 @@ class DetailsScreen extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderImage() {
+    return Image.asset(
+      'assets/images/pokhara.png',
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) => _fallbackImage(),
+    );
+  }
+
+  Widget _fallbackImage() {
+    return Container(
+      color: Colors.grey.shade300,
+      child: const Center(
+        child: Icon(Icons.landscape, size: 56),
       ),
     );
   }
@@ -488,6 +529,42 @@ class DetailsScreen extends StatelessWidget {
   }
 }
 
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final Widget child;
+
+  const _SectionCard({
+    required this.title,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 1.5,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _InfoBadge extends StatelessWidget {
   final String label;
 
@@ -498,12 +575,15 @@ class _InfoBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.2),
+        color: Colors.white.withOpacity(0.18),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         label,
-        style: const TextStyle(color: Colors.white),
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

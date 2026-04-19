@@ -10,6 +10,7 @@ import 'home_tab.dart' as home;
 import 'map_screen.dart';
 import 'recommend_tab.dart' as recommend;
 import 'saved_tab.dart';
+import 'translation_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -138,6 +139,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         accommodations: _accommodations,
         onToggleSaved: _toggleSaved,
       ),
+      const TranslationScreen(),
       const AboutTab(),
     ];
 
@@ -173,6 +175,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: Icon(Icons.bookmark_border),
             selectedIcon: Icon(Icons.bookmark),
             label: 'Saved',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.translate_outlined),
+            selectedIcon: Icon(Icons.translate),
+            label: 'Translate',
           ),
           NavigationDestination(
             icon: Icon(Icons.info_outline),

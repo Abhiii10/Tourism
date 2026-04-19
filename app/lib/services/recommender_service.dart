@@ -114,24 +114,28 @@ class RecommenderService {
     if (activities.contains(activity)) {
       score += 3.5;
       matchedActivity = true;
-      reasons.add('Matches your preferred activity: ${_pretty(prefs.activity)}');
+      reasons.add(_activityReason(prefs.activity));
     } else if (tags.contains(activity) || categories.contains(activity)) {
       score += 2.3;
       matchedActivity = true;
-      reasons.add('Closely related to ${_pretty(prefs.activity)}');
+      reasons.add(
+        'Closely matches your interest in ${_pretty(prefs.activity).toLowerCase()} experiences',
+      );
     } else if (_textContainsAny(
       [type, primaryCategory, shortDescription, fullDescription],
       [activity],
     )) {
       score += 1.2;
       matchedActivity = true;
-      reasons.add('Mentions ${_pretty(prefs.activity)} in destination details');
+      reasons.add(
+        'Includes ${_pretty(prefs.activity).toLowerCase()}-related experiences in its destination details',
+      );
     }
 
     if (priceTier == budget) {
       score += 2.4;
       matchedBudget = true;
-      reasons.add('Fits your ${_pretty(prefs.budget)} budget');
+      reasons.add(_budgetReason(budget));
     } else if (_isNearbyBudget(priceTier, budget)) {
       score += 1.0;
       matchedBudget = true;
@@ -141,28 +145,32 @@ class RecommenderService {
     if (seasons.contains(season)) {
       score += 2.2;
       matchedSeason = true;
-      reasons.add('Best visited in ${_pretty(prefs.season)}');
+      reasons.add('Best visited during ${_pretty(prefs.season)}');
     } else if (seasons.any((s) => _isNearbySeason(s, season))) {
       score += 1.0;
       matchedSeason = true;
-      reasons.add('Still suitable around ${_pretty(prefs.season)}');
+      reasons.add(
+        'Still suitable around the ${_pretty(prefs.season).toLowerCase()} season',
+      );
     }
 
     if (tags.contains(vibe)) {
       score += 2.0;
       matchedVibe = true;
-      reasons.add('Matches your trip vibe: ${_pretty(prefs.vibe)}');
+      reasons.add(_vibeReason(prefs.vibe));
     } else if (_vibeAliases(vibe).any((alias) => tags.contains(alias))) {
       score += 1.6;
       matchedVibe = true;
-      reasons.add('Very close to your preferred vibe');
+      reasons.add(
+        'Very close to your preferred ${_pretty(prefs.vibe).toLowerCase()} trip vibe',
+      );
     } else if (_textContainsAny(
       [type, primaryCategory, shortDescription, fullDescription],
       _vibeAliases(vibe),
     )) {
       score += 1.0;
       matchedVibe = true;
-      reasons.add('Destination atmosphere matches your vibe');
+      reasons.add('The destination atmosphere fits your travel style');
     }
 
     final richnessBoost = _featureRichnessBoost(destination);
@@ -176,7 +184,7 @@ class RecommenderService {
 
     if (!matchedActivity && !matchedBudget && !matchedSeason && !matchedVibe) {
       score += 0.2;
-      reasons.add('General rural tourism match');
+      reasons.add('A reasonable general match for rural tourism exploration');
     }
 
     return RecommendationResult(
@@ -199,7 +207,7 @@ class RecommenderService {
 
     if (explicitSimilarIds.contains(candidateId)) {
       score += 3.8;
-      reasons.add('Marked as similar in the destination dataset');
+      reasons.add('Listed as a similar destination in the dataset');
     }
 
     final seedActivities = seed.activities.map(_norm).toSet();
@@ -221,32 +229,34 @@ class RecommenderService {
 
     if (sharedActivities.isNotEmpty) {
       score += sharedActivities.length * 1.4;
-      reasons.add('Shares activities: ${sharedActivities.take(2).join(', ')}');
+      reasons.add(
+        'Shares similar activities such as ${sharedActivities.take(2).map(_pretty).join(', ')}',
+      );
     }
 
     if (sharedCategories.isNotEmpty) {
       score += sharedCategories.length * 1.1;
-      reasons.add('Shares category: ${sharedCategories.take(2).join(', ')}');
+      reasons.add('Belongs to a similar destination category');
     }
 
     if (sharedTags.isNotEmpty) {
       score += sharedTags.length * 0.8;
-      reasons.add('Has a similar travel vibe');
+      reasons.add('Has a similar travel atmosphere and experience style');
     }
 
     if (sharedSeasons.isNotEmpty) {
       score += 0.9;
-      reasons.add('Best in the same season');
+      reasons.add('Best visited during a similar season');
     }
 
     if (_norm(seed.type) == _norm(candidate.type)) {
       score += 1.0;
-      reasons.add('Same destination type');
+      reasons.add('Similar destination type');
     }
 
     if (_norm(seed.priceTier) == _norm(candidate.priceTier)) {
       score += 0.8;
-      reasons.add('Similar budget level');
+      reasons.add('Matches a similar budget level');
     }
 
     final seedDistrict = _safeLower(seed.district ?? '');
@@ -326,6 +336,62 @@ class RecommenderService {
       }
     }
     return false;
+  }
+
+  String _activityReason(String activity) {
+    switch (activity.trim().toLowerCase()) {
+      case 'culture':
+        return 'Matches your interest in cultural experiences';
+      case 'hiking':
+        return 'Suitable for hiking and outdoor exploration';
+      case 'lake':
+        return 'Offers a lake-focused travel experience';
+      case 'photography':
+        return 'Well suited for photography and scenic views';
+      case 'adventure':
+        return 'A good match for adventure-oriented travel';
+      case 'relaxation':
+        return 'Suitable for a calm and relaxing trip';
+      case 'wildlife':
+        return 'Matches your interest in wildlife-related experiences';
+      case 'viewpoint':
+        return 'Includes strong viewpoint and landscape appeal';
+      default:
+        return 'Matches your interest in ${_pretty(activity).toLowerCase()} experiences';
+    }
+  }
+
+  String _budgetReason(String budget) {
+    switch (budget.trim().toLowerCase()) {
+      case 'budget':
+      case 'low':
+        return 'Suitable for low-budget travel';
+      case 'medium':
+        return 'Suitable for a moderate budget';
+      case 'premium':
+        return 'Suitable for a premium travel experience';
+      default:
+        return 'Fits your budget preference';
+    }
+  }
+
+  String _vibeReason(String vibe) {
+    switch (vibe.trim().toLowerCase()) {
+      case 'quiet':
+        return 'Offers a quiet and less crowded travel atmosphere';
+      case 'peaceful':
+        return 'Offers a peaceful and relaxing environment';
+      case 'family':
+        return 'Suitable for family-friendly travel';
+      case 'photography':
+        return 'Matches a photography-focused trip vibe';
+      case 'adventure':
+        return 'Fits an adventurous trip style';
+      case 'cultural':
+        return 'Strongly matches a cultural trip vibe';
+      default:
+        return 'Matches your preferred trip vibe';
+    }
   }
 
   String _norm(String value) => value.trim().toLowerCase();
