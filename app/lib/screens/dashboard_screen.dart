@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../main.dart' show userProfileService;
 import '../models/accommodation.dart';
 import '../models/destination.dart';
 import '../services/local_data_service.dart';
@@ -51,14 +52,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       setState(() {
         _destinations = destinations;
         _accommodations = accommodations;
-        _service = RecommenderService(similarPlaces);
+        _service = RecommenderService(
+          similarPlaces,
+          userProfileService: userProfileService,
+        );
         _savedDestinations = saved;
         _loading = false;
         _error = null;
       });
     } catch (e) {
       if (!mounted) return;
-
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -73,42 +76,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
       await LocalDataService.instance.removeSavedDestination(destination.id);
     } else {
       await LocalDataService.instance.saveDestination(destination);
+      await userProfileService.recordBookmark(destination);
     }
 
     final updated = await LocalDataService.instance.getSavedDestinations();
 
     if (!mounted) return;
-
-    setState(() {
-      _savedDestinations = updated;
-    });
+    setState(() => _savedDestinations = updated);
   }
 
-  bool _isSaved(Destination destination) {
-    return _savedDestinations.any((d) => d.id == destination.id);
-  }
+  bool _isSaved(Destination destination) =>
+      _savedDestinations.any((d) => d.id == destination.id);
 
-  void _goToTab(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
-  }
+  void _goToTab(int index) => setState(() => _currentIndex = index);
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_error != null || _service == null) {
       return Scaffold(
-        appBar: AppBar(
-          title: const Text('Rural Tourism Guide'),
-        ),
+        appBar: AppBar(title: const Text('Gandaki Tourism Guide')),
         body: Padding(
           padding: const EdgeInsets.all(20),
           child: Text('Could not load app data.\n\n$_error'),
@@ -116,7 +108,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
-    final List<Widget> pages = [
+    final pages = [
       home.HomeTab(
         destinations: _destinations,
         onOpenRecommend: () => _goToTab(1),
@@ -144,17 +136,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     ];
 
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: pages,
-      ),
+      body: IndexedStack(index: _currentIndex, children: pages),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
-        onDestinationSelected: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
+        onDestinationSelected: (i) => setState(() => _currentIndex = i),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),

@@ -454,9 +454,8 @@ class _RecommendTabState extends State<RecommendTab> {
                     MaterialPageRoute(
                       builder: (_) => DetailsScreen(
                         destination: destination,
-                        reasons: result.reasons,
-                        accommodations: widget.accommodations,
-                      ),
+                        nearbyAccommodations: widget.accommodations,
+                     ),
                     ),
                   );
                 },

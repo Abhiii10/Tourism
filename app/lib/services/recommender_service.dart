@@ -1,405 +1,518 @@
+import 'dart:math';
+
+import '../core/utils/app_constants.dart';
+import '../domain/entities/recommendation_result.dart';
 import '../models/destination.dart';
 import '../models/user_preferences.dart';
+import 'user_profile_service.dart';
 
-class RecommendationResult {
-  final Destination destination;
-  final double score;
-  final List<String> reasons;
-
-  const RecommendationResult({
-    required this.destination,
-    required this.score,
-    required this.reasons,
-  });
-}
+export '../domain/entities/recommendation_result.dart';
 
 class RecommenderService {
   final Map<String, List<Map<String, dynamic>>> similarPlaces;
+  final UserProfileService? userProfileService;
+  _TfIdfIndex? _index;
 
-  const RecommenderService(this.similarPlaces);
+  RecommenderService(this.similarPlaces, {this.userProfileService});
 
   List<RecommendationResult> recommendByPreferences(
     UserPreferences prefs,
     List<Destination> destinations, {
-    int topK = 8,
+    int topK = 10,
   }) {
-    final results = <RecommendationResult>[];
+    _index ??= _TfIdfIndex.build(destinations);
 
-    for (final destination in destinations) {
-      final scored = _scoreByPreferences(destination, prefs);
-      if (scored.score > 0) {
-        results.add(scored);
-      }
+    final queryTextVec = _index!.queryVector(_queryTerms(prefs));
+    final queryNumVec = _numericQueryVector(prefs);
+    final scored = <RecommendationResult>[];
+
+    for (final dest in destinations) {
+      final docTextVec = _index!.documentVector(dest.id);
+      if (docTextVec == null) continue;
+
+      final textScore = _cosineSimilarity(queryTextVec, docTextVec);
+      final numericScore =
+          _cosineSimilarity(queryNumVec, _numericDocVector(dest));
+
+      final blended = AppConstants.textScoreWeight * textScore +
+          AppConstants.numericScoreWeight * numericScore;
+
+      if (blended <= 0) continue;
+
+      final affinityBoost = userProfileService?.affinityBoostFor(dest) ?? 0.0;
+      final seasonBonus = dest.bestSeason
+              .map(_norm)
+              .contains(_norm(prefs.season))
+          ? 0.06
+          : 0.0;
+      final budgetBonus =
+          _budgetBonus(_norm(dest.priceTier), _norm(prefs.budget));
+
+      final finalScore =
+          blended + affinityBoost + seasonBonus + budgetBonus;
+
+      scored.add(
+        RecommendationResult(
+          destination: dest,
+          score: finalScore,
+          reasons: _buildReasons(
+            dest,
+            prefs,
+            textScore,
+            numericScore,
+            affinityBoost > 0,
+          ),
+        ),
+      );
     }
 
-    results.sort((a, b) {
-      final scoreCompare = b.score.compareTo(a.score);
-      if (scoreCompare != 0) return scoreCompare;
-      return a.destination.name.toLowerCase().compareTo(
-            b.destination.name.toLowerCase(),
-          );
-    });
+    scored.sort((a, b) => b.score.compareTo(a.score));
 
-    return results.take(topK).toList();
+    return _diversify(
+      scored,
+      topK: topK,
+      maxPerDistrict: AppConstants.maxResultsPerDistrict,
+      maxPerCategory: AppConstants.maxResultsPerCategory,
+    );
   }
 
   List<RecommendationResult> similarToDestination(
     Destination seed,
     List<Destination> destinations, {
-    int topK = 3,
+    int topK = 4,
   }) {
-    final seedId = seed.id.toLowerCase();
+    _index ??= _TfIdfIndex.build(destinations);
 
-    final explicitSimilar = (similarPlaces[seedId] ?? [])
+    final seedVec = _index!.documentVector(seed.id);
+    if (seedVec == null) return [];
+
+    final explicitIds = (similarPlaces[seed.id.toLowerCase()] ?? [])
         .map((e) => (e['id'] as String).toLowerCase())
         .toSet();
 
-    final results = <RecommendationResult>[];
+    final scored = <RecommendationResult>[];
 
-    for (final candidate in destinations) {
-      if (candidate.id.toLowerCase() == seedId) continue;
+    for (final dest in destinations) {
+      if (dest.id == seed.id) continue;
 
-      final scored = _scoreSimilarity(
-        seed: seed,
-        candidate: candidate,
-        explicitSimilarIds: explicitSimilar,
+      final docVec = _index!.documentVector(dest.id);
+      if (docVec == null) continue;
+
+      double sim = _cosineSimilarity(seedVec, docVec);
+      final reasons = <String>[];
+
+      if (explicitIds.contains(dest.id.toLowerCase())) {
+        sim += 0.25;
+        reasons.add('Listed as a similar destination in our dataset');
+      }
+
+      if (sim <= 0) continue;
+
+      final sd = _norm(seed.district ?? '');
+      final dd = _norm(dest.district ?? '');
+      if (sd.isNotEmpty && sd == dd) {
+        sim += 0.05;
+        reasons.add('Located in the same district');
+      }
+
+      reasons.addAll(_buildSimilarityReasons(seed, dest));
+
+      scored.add(
+        RecommendationResult(
+          destination: dest,
+          score: sim,
+          reasons: reasons.take(4).toList(),
+        ),
       );
+    }
 
-      if (scored.score > 0) {
-        results.add(scored);
+    scored.sort((a, b) => b.score.compareTo(a.score));
+    return scored.take(topK).toList();
+  }
+
+  List<double> _numericDocVector(Destination dest) {
+    return _l2Normalise([
+      (dest.adventureLevel ?? 3) / 5.0,
+      (dest.cultureLevel ?? 3) / 5.0,
+      (dest.natureLevel ?? 3) / 5.0,
+      _accessibilityScore(dest.accessibility),
+      dest.familyFriendly == true ? 1.0 : 0.0,
+    ]);
+  }
+
+  List<double> _numericQueryVector(UserPreferences prefs) {
+    final activity = _norm(prefs.activity);
+    final vibe = _norm(prefs.vibe);
+
+    double adventure = 0.5;
+    double culture = 0.5;
+    double nature = 0.5;
+    double accessibility = 0.5;
+    double family = 0.5;
+
+    switch (activity) {
+      case 'adventure':
+      case 'hiking':
+        adventure = 0.9;
+        nature = 0.8;
+        break;
+      case 'culture':
+        culture = 1.0;
+        adventure = 0.3;
+        break;
+      case 'wildlife':
+        nature = 1.0;
+        adventure = 0.6;
+        break;
+      case 'relaxation':
+        adventure = 0.2;
+        accessibility = 0.8;
+        break;
+      case 'lake':
+        nature = 0.9;
+        adventure = 0.4;
+        break;
+      case 'photography':
+      case 'viewpoint':
+        nature = 0.8;
+        culture = 0.6;
+        break;
+    }
+
+    switch (vibe) {
+      case 'family':
+        family = 1.0;
+        adventure = adventure.clamp(0.0, 0.6);
+        accessibility = 0.9;
+        break;
+      case 'adventure':
+        adventure = (adventure + 0.2).clamp(0.0, 1.0);
+        break;
+      case 'cultural':
+        culture = (culture + 0.2).clamp(0.0, 1.0);
+        break;
+      case 'quiet':
+      case 'peaceful':
+        adventure = (adventure - 0.1).clamp(0.0, 1.0);
+        break;
+    }
+
+    return _l2Normalise([
+      adventure,
+      culture,
+      nature,
+      accessibility,
+      family,
+    ]);
+  }
+
+  double _accessibilityScore(String? a) {
+    switch (_norm(a ?? '')) {
+      case 'easy':
+        return 1.0;
+      case 'moderate':
+        return 0.6;
+      case 'difficult':
+        return 0.2;
+      case 'very difficult':
+        return 0.1;
+      default:
+        return 0.5;
+    }
+  }
+
+  List<RecommendationResult> _diversify(
+    List<RecommendationResult> ranked, {
+    required int topK,
+    required int maxPerDistrict,
+    required int maxPerCategory,
+  }) {
+    final districtCount = <String, int>{};
+    final categoryCount = <String, int>{};
+    final out = <RecommendationResult>[];
+
+    for (final r in ranked) {
+      if (out.length >= topK) break;
+
+      final district = _norm(r.destination.district ?? 'unknown');
+      final category = _norm(r.destination.primaryCategory);
+
+      final dc = districtCount[district] ?? 0;
+      final cc = categoryCount[category] ?? 0;
+
+      if (dc >= maxPerDistrict || cc >= maxPerCategory) continue;
+
+      districtCount[district] = dc + 1;
+      categoryCount[category] = cc + 1;
+      out.add(r);
+    }
+
+    if (out.length < topK) {
+      final seen = out.map((r) => r.destination.id).toSet();
+      for (final r in ranked) {
+        if (out.length >= topK) break;
+        if (!seen.contains(r.destination.id)) out.add(r);
       }
     }
 
-    results.sort((a, b) {
-      final scoreCompare = b.score.compareTo(a.score);
-      if (scoreCompare != 0) return scoreCompare;
-      return a.destination.name.toLowerCase().compareTo(
-            b.destination.name.toLowerCase(),
-          );
-    });
-
-    return results.take(topK).toList();
+    return out;
   }
 
-  RecommendationResult _scoreByPreferences(
-    Destination destination,
+  List<String> _buildReasons(
+    Destination dest,
     UserPreferences prefs,
+    double textScore,
+    double numericScore,
+    bool hasAffinityBoost,
   ) {
-    double score = 0;
     final reasons = <String>[];
+    final allTerms = [
+      ...dest.activities.map(_norm),
+      ...dest.category.map(_norm),
+      ...dest.tags.map(_norm),
+    ];
 
-    final activity = prefs.activity.trim().toLowerCase();
-    final budget = prefs.budget.trim().toLowerCase();
-    final season = prefs.season.trim().toLowerCase();
-    final vibe = prefs.vibe.trim().toLowerCase();
-
-    final categories = destination.category.map(_norm).toList();
-    final activities = destination.activities.map(_norm).toList();
-    final tags = destination.tags.map(_norm).toList();
-    final seasons = destination.bestSeason.map(_norm).toList();
-
-    final type = _norm(destination.type);
-    final priceTier = _norm(destination.priceTier);
-    final primaryCategory = _safeLower(destination.primaryCategory);
-    final shortDescription = _safeLower(destination.shortDescription);
-    final fullDescription = _safeLower(destination.fullDescription);
-    final district = _safeLower(destination.district ?? '');
-    final municipality = _safeLower(destination.municipality ?? '');
-
-    bool matchedActivity = false;
-    bool matchedBudget = false;
-    bool matchedSeason = false;
-    bool matchedVibe = false;
-
-    if (activities.contains(activity)) {
-      score += 3.5;
-      matchedActivity = true;
+    if (_activityAliases(_norm(prefs.activity)).any(allTerms.contains)) {
       reasons.add(_activityReason(prefs.activity));
-    } else if (tags.contains(activity) || categories.contains(activity)) {
-      score += 2.3;
-      matchedActivity = true;
-      reasons.add(
-        'Closely matches your interest in ${_pretty(prefs.activity).toLowerCase()} experiences',
-      );
-    } else if (_textContainsAny(
-      [type, primaryCategory, shortDescription, fullDescription],
-      [activity],
-    )) {
-      score += 1.2;
-      matchedActivity = true;
-      reasons.add(
-        'Includes ${_pretty(prefs.activity).toLowerCase()}-related experiences in its destination details',
-      );
     }
 
-    if (priceTier == budget) {
-      score += 2.4;
-      matchedBudget = true;
-      reasons.add(_budgetReason(budget));
-    } else if (_isNearbyBudget(priceTier, budget)) {
-      score += 1.0;
-      matchedBudget = true;
-      reasons.add('Close to your preferred budget range');
-    }
-
-    if (seasons.contains(season)) {
-      score += 2.2;
-      matchedSeason = true;
+    if (dest.bestSeason.map(_norm).contains(_norm(prefs.season))) {
       reasons.add('Best visited during ${_pretty(prefs.season)}');
-    } else if (seasons.any((s) => _isNearbySeason(s, season))) {
-      score += 1.0;
-      matchedSeason = true;
-      reasons.add(
-        'Still suitable around the ${_pretty(prefs.season).toLowerCase()} season',
-      );
     }
 
-    if (tags.contains(vibe)) {
-      score += 2.0;
-      matchedVibe = true;
+    if (_norm(dest.priceTier) == _norm(prefs.budget)) {
+      reasons.add(_budgetReason(_norm(prefs.budget)));
+    }
+
+    if (_vibeAliases(_norm(prefs.vibe)).any(allTerms.contains)) {
       reasons.add(_vibeReason(prefs.vibe));
-    } else if (_vibeAliases(vibe).any((alias) => tags.contains(alias))) {
-      score += 1.6;
-      matchedVibe = true;
+    }
+
+    if (hasAffinityBoost) {
+      reasons.add('Matches your past exploration interests');
+    }
+
+    if (reasons.isEmpty) {
       reasons.add(
-        'Very close to your preferred ${_pretty(prefs.vibe).toLowerCase()} trip vibe',
+        'Strong content match (text: ${textScore.toStringAsFixed(2)}, features: ${numericScore.toStringAsFixed(2)})',
       );
-    } else if (_textContainsAny(
-      [type, primaryCategory, shortDescription, fullDescription],
-      _vibeAliases(vibe),
-    )) {
-      score += 1.0;
-      matchedVibe = true;
-      reasons.add('The destination atmosphere fits your travel style');
     }
 
-    final richnessBoost = _featureRichnessBoost(destination);
-    if (richnessBoost > 0) {
-      score += richnessBoost;
-    }
-
-    if (district.isNotEmpty || municipality.isNotEmpty) {
-      score += 0.15;
-    }
-
-    if (!matchedActivity && !matchedBudget && !matchedSeason && !matchedVibe) {
-      score += 0.2;
-      reasons.add('A reasonable general match for rural tourism exploration');
-    }
-
-    return RecommendationResult(
-      destination: destination,
-      score: score,
-      reasons: reasons.take(4).toList(),
-    );
+    return reasons.take(4).toList();
   }
 
-  RecommendationResult _scoreSimilarity({
-    required Destination seed,
-    required Destination candidate,
-    required Set<String> explicitSimilarIds,
-  }) {
-    double score = 0;
+  List<String> _buildSimilarityReasons(Destination seed, Destination dest) {
     final reasons = <String>[];
 
-    final seedId = seed.id.toLowerCase();
-    final candidateId = candidate.id.toLowerCase();
-
-    if (explicitSimilarIds.contains(candidateId)) {
-      score += 3.8;
-      reasons.add('Listed as a similar destination in the dataset');
-    }
-
-    final seedActivities = seed.activities.map(_norm).toSet();
-    final candidateActivities = candidate.activities.map(_norm).toSet();
-
-    final seedCategories = seed.category.map(_norm).toSet();
-    final candidateCategories = candidate.category.map(_norm).toSet();
-
-    final seedTags = seed.tags.map(_norm).toSet();
-    final candidateTags = candidate.tags.map(_norm).toSet();
-
-    final seedSeasons = seed.bestSeason.map(_norm).toSet();
-    final candidateSeasons = candidate.bestSeason.map(_norm).toSet();
-
-    final sharedActivities = seedActivities.intersection(candidateActivities);
-    final sharedCategories = seedCategories.intersection(candidateCategories);
-    final sharedTags = seedTags.intersection(candidateTags);
-    final sharedSeasons = seedSeasons.intersection(candidateSeasons);
-
-    if (sharedActivities.isNotEmpty) {
-      score += sharedActivities.length * 1.4;
+    final sharedActs = seed.activities.map(_norm).toSet()
+      ..retainAll(dest.activities.map(_norm).toSet());
+    if (sharedActs.isNotEmpty) {
       reasons.add(
-        'Shares similar activities such as ${sharedActivities.take(2).map(_pretty).join(', ')}',
+        'Shares activities: ${sharedActs.take(2).map(_pretty).join(', ')}',
       );
     }
 
-    if (sharedCategories.isNotEmpty) {
-      score += sharedCategories.length * 1.1;
-      reasons.add('Belongs to a similar destination category');
+    final sharedCats = seed.category.map(_norm).toSet()
+      ..retainAll(dest.category.map(_norm).toSet());
+    if (sharedCats.isNotEmpty) {
+      reasons.add('Similar destination category');
     }
 
-    if (sharedTags.isNotEmpty) {
-      score += sharedTags.length * 0.8;
-      reasons.add('Has a similar travel atmosphere and experience style');
+    if (_norm(seed.priceTier) == _norm(dest.priceTier)) {
+      reasons.add('Similar budget level');
     }
 
+    final sharedSeasons = seed.bestSeason.map(_norm).toSet()
+      ..retainAll(dest.bestSeason.map(_norm).toSet());
     if (sharedSeasons.isNotEmpty) {
-      score += 0.9;
-      reasons.add('Best visited during a similar season');
+      reasons.add('Best visited in a similar season');
     }
 
-    if (_norm(seed.type) == _norm(candidate.type)) {
-      score += 1.0;
-      reasons.add('Similar destination type');
-    }
-
-    if (_norm(seed.priceTier) == _norm(candidate.priceTier)) {
-      score += 0.8;
-      reasons.add('Matches a similar budget level');
-    }
-
-    final seedDistrict = _safeLower(seed.district ?? '');
-    final candidateDistrict = _safeLower(candidate.district ?? '');
-    if (seedDistrict.isNotEmpty && seedDistrict == candidateDistrict) {
-      score += 0.7;
-      reasons.add('Located in the same district');
-    }
-
-    if (candidateId == seedId) {
-      score = 0;
-      reasons.clear();
-    }
-
-    return RecommendationResult(
-      destination: candidate,
-      score: score,
-      reasons: reasons.take(4).toList(),
-    );
+    return reasons;
   }
 
-  double _featureRichnessBoost(Destination destination) {
-    final total = destination.category.length +
-        destination.activities.length +
-        destination.tags.length;
+  double _budgetBonus(String actual, String preferred) {
+    if (actual == preferred) return 0.06;
 
-    if (total >= 10) return 0.6;
-    if (total >= 6) return 0.35;
-    if (total >= 3) return 0.18;
-    return 0;
-  }
-
-  bool _isNearbyBudget(String actual, String preferred) {
     const order = ['budget', 'medium', 'premium'];
     final a = order.indexOf(actual);
     final b = order.indexOf(preferred);
 
-    if (a == -1 || b == -1) return false;
-    return (a - b).abs() == 1;
+    if (a == -1 || b == -1) return 0;
+    return (a - b).abs() == 1 ? 0.02 : 0;
   }
 
-  bool _isNearbySeason(String actual, String preferred) {
-    final nearby = <String, Set<String>>{
-      'spring': {'summer'},
-      'summer': {'spring', 'monsoon'},
-      'monsoon': {'summer', 'autumn'},
-      'autumn': {'monsoon', 'winter'},
-      'winter': {'autumn'},
+  List<String> _queryTerms(UserPreferences prefs) => [
+        ..._activityAliases(_norm(prefs.activity)),
+        ..._vibeAliases(_norm(prefs.vibe)),
+        _norm(prefs.budget),
+        _norm(prefs.season),
+      ];
+
+  List<String> _activityAliases(String a) {
+    const map = <String, List<String>>{
+      'culture': [
+        'culture',
+        'cultural',
+        'heritage',
+        'village',
+        'museum',
+        'pilgrimage',
+      ],
+      'hiking': ['hiking', 'trekking', 'adventure', 'trek', 'trail'],
+      'adventure': [
+        'adventure',
+        'hiking',
+        'trekking',
+        'rafting',
+        'paragliding',
+        'zipline',
+      ],
+      'wildlife': ['wildlife', 'bird', 'forest', 'nature', 'conservation'],
+      'relaxation': ['relax', 'peaceful', 'lake', 'scenic', 'retreat'],
+      'lake': ['lake', 'boating', 'waterside', 'scenic'],
+      'photography': ['photography', 'viewpoint', 'panorama', 'scenic'],
+      'viewpoint': ['viewpoint', 'panorama', 'sunrise', 'scenic'],
     };
-
-    return nearby[preferred]?.contains(actual) ?? false;
+    return map[a] ?? [a];
   }
 
-  List<String> _vibeAliases(String vibe) {
-    switch (vibe) {
-      case 'quiet':
-        return ['quiet', 'peaceful', 'relaxation', 'nature'];
-      case 'peaceful':
-        return ['peaceful', 'quiet', 'relaxation', 'nature'];
-      case 'family':
-        return ['family', 'culture', 'relaxation'];
-      case 'photography':
-        return ['photography', 'viewpoint', 'lake', 'nature'];
-      case 'adventure':
-        return ['adventure', 'hiking', 'wildlife', 'viewpoint'];
-      case 'cultural':
-        return ['cultural', 'culture', 'heritage', 'village'];
-      default:
-        return [vibe];
+  List<String> _vibeAliases(String v) {
+    const map = <String, List<String>>{
+      'family': ['family', 'easy', 'safe', 'picnic'],
+      'adventure': ['adventure', 'thrill', 'trekking', 'rafting'],
+      'cultural': ['culture', 'heritage', 'local', 'traditional'],
+      'quiet': ['quiet', 'peaceful', 'relax', 'retreat'],
+      'peaceful': ['peaceful', 'quiet', 'relax', 'retreat'],
+    };
+    return map[v] ?? [v];
+  }
+
+  String _activityReason(String raw) =>
+      'Matches your interest in ${_pretty(raw)}';
+
+  String _budgetReason(String raw) =>
+      'Fits your ${_pretty(raw)} budget';
+
+  String _vibeReason(String raw) =>
+      'Offers a ${_pretty(raw)} vibe';
+
+  String _pretty(String s) {
+    if (s.isEmpty) return s;
+    final t = s.trim();
+    return t[0].toUpperCase() + t.substring(1).toLowerCase();
+  }
+
+  String _norm(String s) => s.trim().toLowerCase();
+
+  List<double> _l2Normalise(List<double> v) {
+    final mag = sqrt(v.fold(0.0, (sum, x) => sum + x * x));
+    if (mag == 0) return List<double>.filled(v.length, 0.0);
+    return v.map((e) => e / mag).toList();
+  }
+
+  double _cosineSimilarity(List<double> a, List<double> b) {
+    if (a.length != b.length || a.isEmpty) return 0.0;
+
+    double dot = 0.0;
+    double ma = 0.0;
+    double mb = 0.0;
+
+    for (int i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      ma += a[i] * a[i];
+      mb += b[i] * b[i];
     }
-  }
 
-  bool _textContainsAny(List<String> haystacks, List<String> needles) {
-    for (final hay in haystacks) {
-      for (final needle in needles) {
-        if (hay.contains(needle)) return true;
+    if (ma == 0 || mb == 0) return 0.0;
+    return dot / (sqrt(ma) * sqrt(mb));
+  }
+}
+
+class _TfIdfIndex {
+  final Map<String, int> vocab;
+  final Map<String, List<double>> docVectors;
+
+  _TfIdfIndex({
+    required this.vocab,
+    required this.docVectors,
+  });
+
+  factory _TfIdfIndex.build(List<Destination> destinations) {
+    final vocab = <String, int>{};
+    final docTerms = <String, List<String>>{};
+
+    for (final d in destinations) {
+      final terms = <String>[
+        ...d.category,
+        ...d.activities,
+        ...d.tags,
+        d.description,
+        d.type,
+        d.district ?? '',
+      ].expand((e) => _tokenize(e)).toList();
+
+      docTerms[d.id] = terms;
+
+      for (final t in terms) {
+        vocab.putIfAbsent(t, () => vocab.length);
       }
     }
-    return false;
-  }
 
-  String _activityReason(String activity) {
-    switch (activity.trim().toLowerCase()) {
-      case 'culture':
-        return 'Matches your interest in cultural experiences';
-      case 'hiking':
-        return 'Suitable for hiking and outdoor exploration';
-      case 'lake':
-        return 'Offers a lake-focused travel experience';
-      case 'photography':
-        return 'Well suited for photography and scenic views';
-      case 'adventure':
-        return 'A good match for adventure-oriented travel';
-      case 'relaxation':
-        return 'Suitable for a calm and relaxing trip';
-      case 'wildlife':
-        return 'Matches your interest in wildlife-related experiences';
-      case 'viewpoint':
-        return 'Includes strong viewpoint and landscape appeal';
-      default:
-        return 'Matches your interest in ${_pretty(activity).toLowerCase()} experiences';
+    final df = List<int>.filled(vocab.length, 0);
+    for (final terms in docTerms.values) {
+      final seen = <int>{};
+      for (final t in terms) {
+        final idx = vocab[t];
+        if (idx != null && seen.add(idx)) {
+          df[idx]++;
+        }
+      }
     }
-  }
 
-  String _budgetReason(String budget) {
-    switch (budget.trim().toLowerCase()) {
-      case 'budget':
-      case 'low':
-        return 'Suitable for low-budget travel';
-      case 'medium':
-        return 'Suitable for a moderate budget';
-      case 'premium':
-        return 'Suitable for a premium travel experience';
-      default:
-        return 'Fits your budget preference';
+    final nDocs = destinations.length;
+    final docVectors = <String, List<double>>{};
+
+    for (final entry in docTerms.entries) {
+      final tf = List<double>.filled(vocab.length, 0.0);
+      for (final t in entry.value) {
+        final idx = vocab[t];
+        if (idx != null) tf[idx] += 1.0;
+      }
+
+      for (int i = 0; i < tf.length; i++) {
+        if (tf[i] == 0) continue;
+        final idf = log((nDocs + 1) / (df[i] + 1)) + 1.0;
+        tf[i] = tf[i] * idf;
+      }
+
+      final mag = sqrt(tf.fold(0.0, (s, x) => s + x * x));
+      docVectors[entry.key] =
+          mag == 0 ? tf : tf.map((e) => e / mag).toList();
     }
+
+    return _TfIdfIndex(vocab: vocab, docVectors: docVectors);
   }
 
-  String _vibeReason(String vibe) {
-    switch (vibe.trim().toLowerCase()) {
-      case 'quiet':
-        return 'Offers a quiet and less crowded travel atmosphere';
-      case 'peaceful':
-        return 'Offers a peaceful and relaxing environment';
-      case 'family':
-        return 'Suitable for family-friendly travel';
-      case 'photography':
-        return 'Matches a photography-focused trip vibe';
-      case 'adventure':
-        return 'Fits an adventurous trip style';
-      case 'cultural':
-        return 'Strongly matches a cultural trip vibe';
-      default:
-        return 'Matches your preferred trip vibe';
+  List<double>? documentVector(String id) => docVectors[id];
+
+  List<double> queryVector(List<String> terms) {
+    final vec = List<double>.filled(vocab.length, 0.0);
+    for (final t in terms.expand(_tokenize)) {
+      final idx = vocab[t];
+      if (idx != null) vec[idx] += 1.0;
     }
+
+    final mag = sqrt(vec.fold(0.0, (s, x) => s + x * x));
+    return mag == 0 ? vec : vec.map((e) => e / mag).toList();
   }
 
-  String _norm(String value) => value.trim().toLowerCase();
-
-  String _safeLower(String value) => value.trim().toLowerCase();
-
-  String _pretty(String value) {
-    if (value.isEmpty) return value;
-    return value[0].toUpperCase() + value.substring(1);
+  static List<String> _tokenize(String input) {
+    return input
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
+        .split(RegExp(r'\s+'))
+        .where((e) => e.isNotEmpty)
+        .toList();
   }
 }

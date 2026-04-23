@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../core/utils/app_constants.dart';
+import '../data/datasources/user_profile_local_datasource.dart';
+import '../domain/entities/recommendation_result.dart';
 import '../models/destination.dart';
 import '../models/user_preferences.dart';
-import 'recommender_service.dart';
 
 class LocalDataService {
   LocalDataService._();
@@ -18,11 +20,11 @@ class LocalDataService {
     if (_db != null) return;
 
     final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'rural_tourism_app.db');
+    final path = join(dbPath, AppConstants.dbName);
 
     _db = await openDatabase(
       path,
-      version: 1,
+      version: AppConstants.dbVersion,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE saved_destinations(
@@ -48,6 +50,15 @@ class LocalDataService {
             created_at INTEGER NOT NULL
           )
         ''');
+
+        await UserProfileLocalDatasource.runMigrations(db, 0, version);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        await UserProfileLocalDatasource.runMigrations(
+          db,
+          oldVersion,
+          newVersion,
+        );
       },
     );
   }
@@ -55,10 +66,12 @@ class LocalDataService {
   Database get _database {
     final db = _db;
     if (db == null) {
-      throw Exception('LocalDataService not initialized. Call init() first.');
+      throw StateError('LocalDataService not initialized. Call init() first.');
     }
     return db;
   }
+
+  Database get database => _database;
 
   String buildRecommendationCacheKey(
     UserPreferences prefs, {
@@ -115,7 +128,8 @@ class LocalDataService {
     );
 
     return rows.map((row) {
-      final payload = jsonDecode(row['payload'] as String) as Map<String, dynamic>;
+      final payload =
+          jsonDecode(row['payload'] as String) as Map<String, dynamic>;
       return Destination.fromJson(payload);
     }).toList();
   }
@@ -139,13 +153,13 @@ class LocalDataService {
   ) async {
     await init();
 
-    final payload = results.map((r) {
-      return {
-        'score': r.score,
-        'reasons': r.reasons,
-        'destination': r.destination.toJson(),
-      };
-    }).toList();
+    final payload = results
+        .map((r) => {
+              'score': r.score,
+              'reasons': r.reasons,
+              'destination': r.destination.toJson(),
+            })
+        .toList();
 
     await _database.insert(
       'recommendation_cache',
@@ -156,11 +170,6 @@ class LocalDataService {
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
-
-    await logEvent('recommendations_cached', {
-      'cache_key': cacheKey,
-      'count': results.length,
-    });
   }
 
   Future<List<RecommendationResult>> getCachedRecommendations(

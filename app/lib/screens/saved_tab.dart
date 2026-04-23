@@ -53,8 +53,7 @@ class SavedTab extends StatelessWidget {
                             MaterialPageRoute(
                               builder: (_) => DetailsScreen(
                                 destination: destination,
-                                reasons: const ['Saved destination'],
-                                accommodations: accommodations,
+                                nearbyAccommodations: accommodations,
                               ),
                             ),
                           );

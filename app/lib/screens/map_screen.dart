@@ -69,8 +69,7 @@ class MapScreen extends StatelessWidget {
                             MaterialPageRoute(
                               builder: (_) => DetailsScreen(
                                 destination: destination,
-                                reasons: const ['Selected from map'],
-                                accommodations: accommodations,
+                                nearbyAccommodations: accommodations, // ✅ FIXED
                               ),
                             ),
                           );

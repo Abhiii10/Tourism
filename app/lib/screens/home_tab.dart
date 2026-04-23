@@ -307,7 +307,6 @@ class _HomeTabState extends State<HomeTab> {
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     if (_query.isEmpty) ...[
                       if (_recentSearches.isNotEmpty) ...[
                         Text(
@@ -348,7 +347,6 @@ class _HomeTabState extends State<HomeTab> {
                       ),
                       const SizedBox(height: 16),
                     ],
-
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(18),
@@ -409,9 +407,7 @@ class _HomeTabState extends State<HomeTab> {
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 16),
-
                     Text(
                       _debouncedQuery.isEmpty
                           ? 'Featured destinations'
@@ -419,7 +415,6 @@ class _HomeTabState extends State<HomeTab> {
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 12),
-
                     if (_debouncedQuery.isEmpty)
                       ...featured.map(
                         (d) => _destinationCard(
@@ -530,8 +525,6 @@ class _HomeTabState extends State<HomeTab> {
               MaterialPageRoute(
                 builder: (_) => DetailsScreen(
                   destination: d,
-                  reasons: [reason],
-                  accommodations: const [],
                 ),
               ),
             );
@@ -612,8 +605,6 @@ class _HomeTabState extends State<HomeTab> {
                                 MaterialPageRoute(
                                   builder: (_) => DetailsScreen(
                                     destination: d,
-                                    reasons: [reason],
-                                    accommodations: const [],
                                   ),
                                 ),
                               );
